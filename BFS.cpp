@@ -1,145 +1,96 @@
 #include<iostream>
-#include<stdlib.h>
 #include<queue>
+#include<vector>
+#include<omp.h>
+
 using namespace std;
 
+class Node{
+    public:
+    int data;
+    Node *left, *right;
 
-class node
-{
-   public:
-	
-	node *left, *right;
-	int data;
-
-};	 
-
-class Breadthfs
-{
- 
- public:
- 
- node *insert(node *, int);
- void bfs(node *);
- 
+    Node(int val){
+        data = val;
+        left = right = nullptr;
+    }
 };
 
+Node *insert(Node *root, int data){
+    if(!root) return new Node(data);
 
-node *insert(node *root, int data)
-// inserts a node in tree
-{
+    queue<Node *> q;
+    q.push(root);
 
-	if(!root)
-	{
-		
-		root=new node;
-		root->left=NULL;
-		root->right=NULL;
-		root->data=data;
-		return root;
-	}
+    while(!q.empty()){
+        Node *temp = q.front();
+        q.pop();
 
-	queue<node *> q;
-	q.push(root);
-	
-	while(!q.empty())
-	{
+        if(!temp->left){
+            temp->left = new Node(data);
+            return root;
+        }
+        else{
+            q.push(temp->left);
+        }
 
-		node *temp=q.front();
-		q.pop();
-	
-		if(temp->left==NULL)
-		{
-			
-			temp->left=new node;
-			temp->left->left=NULL;
-			temp->left->right=NULL;
-			temp->left->data=data;	
-			return root;
-		}
-		else
-		{
+        if(!temp->right){
+            temp->right = new Node(data);
+            return root;
+        }
+        else{
+            q.push(temp->right);
+        }
+        
+    }
 
-		q.push(temp->left);
-
-		}
-
-		if(temp->right==NULL)
-		{
-			
-			temp->right=new node;
-			temp->right->left=NULL;
-			temp->right->right=NULL;
-			temp->right->data=data;	
-			return root;
-		}
-		else
-		{
-
-		q.push(temp->right);
-
-		}
-
-	}
-	
+    return root;
 }
 
+void bfs_parallel(Node *root){
+    if(!root) return;
 
-void bfs(node *head)
-{
+    vector<Node *> currentLevel{root};
 
-		queue<node*> q;
-		q.push(head);
-		
-		int qSize;
-		
-		while (!q.empty()) 
-		{
-			qSize = q.size();
-			#pragma omp parallel for
-                //creates parallel threads
-			for (int i = 0; i < qSize; i++) 
-			{
-				node* currNode;
-				#pragma omp critical
-				{
-				  currNode = q.front();
-				  q.pop();
-				  cout<<"\t"<<currNode->data;
-				  
-				}// prints parent node
-				#pragma omp critical
-				{
-				if(currNode->left)// push parent's left node in queue
-					q.push(currNode->left);
-				if(currNode->right)
-					q.push(currNode->right);
-				}// push parent's right node in queue		
+    while(!currentLevel.empty()){
+        vector<Node *> nextLevel;
+        #pragma omp parallel
+        {
+            vector<Node *> localNext;
+            #pragma omp nowait
+            for(int i = 0; i < currentLevel.size(); i++){
+                Node *node = currentLevel[i];
 
-			}
-		}
+                #pragma omp critical
+                cout<<node->data<<" ";
 
+                if(node->left) localNext.push_back(node->left);
+                if(node->right) localNext.push_back(node->right);
+            }
+
+            #pragma omp critical
+            nextLevel.insert(nextLevel.end(), localNext.begin(), localNext.end());
+        }
+
+        currentLevel = nextLevel;
+    }
 }
+
 
 int main(){
+    Node *root = nullptr;
+    int data;
+    int n;
+    cout<<"Enter total number of nodes";
+    cin>>n;
+    cout<<"\nEnter Data";
+    for(int i = 0; i < n; i++){
+        cin>>data;
+        root = insert(data, root);
+    }
 
-	node *root=NULL;
-	int data;
-	char ans;
-	
-	do
-	{
-		cout<<"\n enter data=>";
-		cin>>data;
-		
-		root=insert(root,data);
-	
-		cout<<"do you want insert one more node?";
-		cin>>ans;
-	
-	}while(ans=='y'||ans=='Y');
-	
-	bfs(root);
-	
-	return 0;
+    cout<<"\nParallel BFS Traversal"<<endl;
+    bfs_parallel(root);
+
+    return 0;
 }
-

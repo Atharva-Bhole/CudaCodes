@@ -1,63 +1,67 @@
-#include <cuda_runtime.h>
-#include <iostream>
+#include<cuda_runtime.h>
+#include<iostream>
+using namespace std;
 
-__global__ void matmul(int* A, int* B, int* C, int N) {
-    int Row = blockIdx.y*blockDim.y+threadIdx.y;
-    int Col = blockIdx.x*blockDim.x+threadIdx.x;
-    if (Row < N && Col < N) {
-        int Pvalue = 0;
-        for (int k = 0; k < N; k++) {
-            Pvalue += A[Row*N+k] * B[k*N+Col];
+__global__ void matmul(const int *a, const int *b, int *c, int n){
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(row < n && col < n){
+        int value = 0;
+        for(int k = 0; k < n; k++){
+            value += a[row * n + k] * b[k * n + col];
         }
-        C[Row*N+Col] = Pvalue;
+        c[row * n + col] = value;
     }
 }
 
-int main() {
-    int N = 512;
-    int size = N * N * sizeof(int);
-    int* A, * B, * C;
-    int* dev_A, * dev_B, * dev_C;
-    cudaMallocHost(&A, size);
-    cudaMallocHost(&B, size);
-    cudaMallocHost(&C, size);
-    cudaMalloc(&dev_A, size);
-    cudaMalloc(&dev_B, size);
-    cudaMalloc(&dev_C, size);
+int main(){
+    int n = 512;
+    size_t size = n * n * sizeof(int);
 
-    // Initialize matrices A and B
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            A[i*N+j] = i*N+j;
-            B[i*N+j] = j*N+i;
+    int *a, *b, *c;
+    int *devA, *devB, *devC;
+
+    cudaMallocHost(&a, size);
+    cudaMallocHost(&b, size);
+    cudaMallocHost(&c, size);
+
+    cudaMalloc(&devA, size);
+    cudaMalloc(&devB, size);
+    cudaMalloc(&devC, size);
+
+    for(int i =0 ; i < n; i++){
+        for(int j = 0; j < n; j++){
+            a[i*n+j] = i*n+j;
+            b[i*n+j] = j*n+i;
         }
     }
 
-    cudaMemcpy(dev_A, A, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_B, B, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(devA, a, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(devB, b, size, cudaMemcpyHostToDevice);
+    dim3 block(16, 16);
+    dim3 grid((n + block.x - 1) / block.x,
+              (n + block.y - 1) / block.y);
 
-    dim3 dimBlock(16, 16);
-    dim3 dimGrid(N/dimBlock.x, N/dimBlock.y);
-
-    matmul<<<dimGrid, dimBlock>>>(dev_A, dev_B, dev_C, N);
-
-    cudaMemcpy(C, dev_C, size, cudaMemcpyDeviceToHost);
-
-    // Print the result
-    for (int i = 0; i < 10; i++) {
-        for (int j = 0; j < 10; j++) {
-            std::cout << C[i*N+j] << " ";
+    matmul<<<grid, block>>>(devA, devB, devC, n);
+    cudaDeviceSynchronize();
+    cudaMemcpy(c, devC, size, cudaMemcpyDeviceToHost);
+     cout << "Top-left 10x10 result:\n";
+    for (int i = 0; i < min(10, n); i++) {
+        for (int j = 0; j < min(10, n); j++) {
+            cout << c[i * n + j] << " ";
         }
-        std::cout << std::endl;
+        cout << endl;
     }
 
-    // Free memory
-    cudaFree(dev_A);
-    cudaFree(dev_B);
-    cudaFree(dev_C);
-    cudaFreeHost(A);
-    cudaFreeHost(B);
-    cudaFreeHost(C);
+    cudaFree(devA);
+    cudaFree(devB);
+    cudaFree(devC);
+
+    cudaFreeHost(a);
+    cudaFreeHost(b);
+    cudaFreeHost(c);
 
     return 0;
+
 }
